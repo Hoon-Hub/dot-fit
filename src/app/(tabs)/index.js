@@ -13,7 +13,14 @@ import StepSummary from '../../components/StepSummary';
 import CharacterSection from '../../components/CharacterSection';
 import GoalProgress from '../../components/GoalProgress';
 import WeeklyActivity from '../../components/WeeklyActivity';
-import { getTodayActivity, getWeeklyActivity, refreshActivity } from '../../services/healthService';
+import {
+  initializeHealthConnect,
+  hasStepPermission,
+  requestStepPermission,
+  getTodayActivity,
+  getWeeklyActivity,
+  refreshActivity,
+} from '../../services/healthService';
 import { Colors, Spacing, MaxContentWidth } from '../../constants/theme';
 
 export default function HomeScreen() {
@@ -30,6 +37,15 @@ export default function HomeScreen() {
     try {
       setLoading(true);
       setError(null);
+
+      const isInitialized = await initializeHealthConnect();
+      if (isInitialized) {
+        const hasPerm = await hasStepPermission();
+        if (!hasPerm) {
+          await requestStepPermission();
+        }
+      }
+
       const [today, weekly] = await Promise.all([
         getTodayActivity(),
         getWeeklyActivity(),

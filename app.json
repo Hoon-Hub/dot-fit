@@ -1,16 +1,20 @@
 {
   "expo": {
-    "name": "walking-days",
-    "slug": "walking-days",
+    "name": "dot-fit",
+    "slug": "dot-fit",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "walkingdays",
+    "scheme": "dotfit",
     "userInterfaceStyle": "automatic",
     "ios": {
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.sh.dotfit",
+      "permissions": [
+        "android.permission.health.READ_STEPS"
+      ],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
@@ -32,11 +36,26 @@
           "image": "./assets/images/splash-icon.png",
           "imageWidth": 76
         }
+      ],
+      "react-native-health-connect",
+      [
+        "expo-build-properties",
+        {
+          "android": {
+            "minSdkVersion": 26
+          }
+        }
       ]
     ],
     "experiments": {
       "typedRoutes": true,
       "reactCompiler": true
+    },
+    "extra": {
+      "router": {},
+      "eas": {
+        "projectId": "1c714a48-f058-43b1-a52c-e1535788c2d4"
+      }
     }
   }
 }

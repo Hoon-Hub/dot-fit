@@ -40,21 +40,21 @@ export default function StepSummary({ activity, isRefreshing, onRefresh, colorSc
 
       {/* 보조 지표 (이동 거리 & 운동 칼로리) */}
       <View style={styles.metricsRow}>
-        {distance !== null && (
-          <View style={styles.metricItem}>
-            <Text style={[styles.metricValue, { color: theme.text }]}>{distance} km</Text>
-            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>이동 거리</Text>
-          </View>
-        )}
-        {distance !== null && calories !== null && (
-          <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
-        )}
-        {calories !== null && (
-          <View style={styles.metricItem}>
-            <Text style={[styles.metricValue, { color: theme.text }]}>{calories} kcal</Text>
-            <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>운동 칼로리</Text>
-          </View>
-        )}
+        <View style={styles.metricItem}>
+          <Text style={[styles.metricValue, { color: theme.text }]}>
+            {distance != null ? `${distance} km` : '-- km'}
+          </Text>
+          <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>이동 거리</Text>
+        </View>
+        
+        <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
+        
+        <View style={styles.metricItem}>
+          <Text style={[styles.metricValue, { color: theme.text }]}>
+            {calories != null ? `${calories} kcal` : '-- kcal'}
+          </Text>
+          <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>운동 칼로리</Text>
+        </View>
       </View>
     </View>
   );

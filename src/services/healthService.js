@@ -1,10 +1,16 @@
+import {
+  aggregateRecord,
+  getGrantedPermissions,
+  initialize,
+  requestPermission,
+} from 'react-native-health-connect';
 import { getTodayDateString } from '../utils/dateUtils';
 
 /**
- * Health Service Abstraction Layer
+ * Health Service Layer
  * 
- * 현재는 Mock 데이터를 제공하며, 향후 Android Health Connect API
- * 연동 시 이 파일의 내부 구현만 교체할 수 있도록 설계되었습니다.
+ * Android Health Connect API(react-native-health-connect) 연동으로
+ * 실제 걸음수 데이터를 조회합니다.
  */
 
 const createInitialMockData = () => {
@@ -12,7 +18,7 @@ const createInitialMockData = () => {
   const [year, month, day] = todayDateStr.split('-').map(Number);
   const baseDate = new Date(year, month - 1, day);
 
-  const mockWeeklySteps = [7210, 9430, 5810, 10230, 6940, 8900, 8421];
+  const mockWeeklySteps = [7210, 9430, 5810, 10230, 6940, 8900, 0];
   const weeklyData = [];
 
   for (let i = 6; i >= 0; i--) {
@@ -31,10 +37,10 @@ const createInitialMockData = () => {
 
   const todayActivity = {
     date: todayDateStr,
-    steps: 8421,
+    steps: 0,
     goal: 10000,
-    distance: 5.8,
-    calories: 340,
+    distance: null,
+    calories: null,
     goalCompleted: false,
   };
 
@@ -42,22 +48,232 @@ const createInitialMockData = () => {
 };
 
 let mockState = createInitialMockData();
+let isInitialized = false;
 
 /**
- * 오늘 자 활동 데이터를 조회합니다.
- * @returns {Promise<{date: string, steps: number, goal: number, distance: number|null, calories: number|null, goalCompleted: boolean}>}
+ * Health Connect SDK를 초기화합니다.
+ * @returns {Promise<boolean>}
  */
-export async function getTodayActivity() {
-  await new Promise((resolve) => setTimeout(resolve, 100));
-  return { ...mockState.todayActivity };
+export async function initializeHealthConnect() {
+  try {
+    const result = await initialize();
+    isInitialized = Boolean(result);
+    console.log('Health Connect initialized:', isInitialized);
+    return isInitialized;
+  } catch (err) {
+    console.error('Health Connect initialization failed:', err);
+    isInitialized = false;
+    return false;
+  }
 }
 
 /**
- * 최근 7일간의 걸음수 데이터 목록을 조회합니다.
+ * READ_STEPS 권한이 허용되어 있는지 확인합니다.
+ * @returns {Promise<boolean>}
+ */
+export async function hasStepPermission() {
+  try {
+    if (!isInitialized) {
+      const initOk = await initializeHealthConnect();
+      if (!initOk) return false;
+    }
+    const grantedPermissions = await getGrantedPermissions();
+    const hasPerm = grantedPermissions.some(
+      (p) => p.accessType === 'read' && p.recordType === 'Steps'
+    );
+    console.log('READ_STEPS permission status:', hasPerm);
+    return hasPerm;
+  } catch (err) {
+    console.error('Failed to check READ_STEPS permission:', err);
+    return false;
+  }
+}
+
+/**
+ * READ_STEPS 권한을 요청합니다.
+ * @returns {Promise<boolean>}
+ */
+export async function requestStepPermission() {
+  try {
+    if (!isInitialized) {
+      const initOk = await initializeHealthConnect();
+      if (!initOk) return false;
+    }
+    const grantedPermissions = await requestPermission([
+      { accessType: 'read', recordType: 'Steps' },
+    ]);
+
+    console.log(
+      'requestPermission raw result:',
+      JSON.stringify(grantedPermissions, null, 2),
+    )
+
+    const isGranted = grantedPermissions.some(
+      (p) => p.accessType === 'read' && p.recordType === 'Steps'
+    );
+    console.log('READ_STEPS permission requested result:', isGranted);
+    return isGranted;
+  } catch (err) {
+    console.error('Failed to request READ_STEPS permission:', err);
+    return false;
+  }
+}
+
+/**
+ * 전체 통합(Aggregate) 걸음수를 조회합니다.
+ * DataOrigin 필터 없이 Health Connect의 activity deduplication / priority가 적용된 값입니다.
+ * @param {Object} timeRangeFilter 
+ * @returns {Promise<{steps: number | null, dataOrigins: string[]}>}
+ */
+async function getTodayAggregateSteps(timeRangeFilter) {
+  try {
+    const result = await aggregateRecord({
+      recordType: 'Steps',
+      timeRangeFilter,
+    });
+    
+    const steps = result?.COUNT_TOTAL !== undefined ? result.COUNT_TOTAL : null;
+    const dataOrigins = result?.dataOrigins || [];
+    return { steps, dataOrigins };
+  } catch (err) {
+    console.error('Failed to get aggregate steps:', err);
+    return { steps: null, dataOrigins: [] };
+  }
+}
+
+/**
+ * Android Phone 자체에서 기록한 걸음수만 조회합니다.
+ * @param {Object} timeRangeFilter 
+ * @param {string[]} availableOrigins 
+ * @returns {Promise<number | null>}
+ */
+async function getTodayPhoneSteps(timeRangeFilter, availableOrigins) {
+  if (!availableOrigins || availableOrigins.length === 0) return null;
+
+  // Phone DataOrigin 식별
+  const phoneOrigins = availableOrigins.filter(
+    (origin) =>
+      origin === 'android' || origin.startsWith('com.android.healthconnect.phone.')
+  );
+
+  if (phoneOrigins.length === 0) return null;
+
+  try {
+    const deviceResult = await aggregateRecord({
+      recordType: 'Steps',
+      timeRangeFilter,
+      dataOriginFilter: phoneOrigins,
+    });
+    
+    return deviceResult?.COUNT_TOTAL !== undefined ? deviceResult.COUNT_TOTAL : null;
+  } catch (err) {
+    console.error('Failed to get phone steps:', err);
+    return null;
+  }
+}
+
+/**
+ * 로컬 시간 기준 오늘 00:00:00부터 현재 시각까지의 실제 걸음수 합계를 조회합니다.
+ * 현재 정책: Phone steps 우선, 실패 시 aggregate fallback
+ * @returns {Promise<number>}
+ */
+export async function getTodaySteps() {
+  try {
+    if (!isInitialized) {
+      const initOk = await initializeHealthConnect();
+      if (!initOk) return 0;
+    }
+
+    const hasPerm = await hasStepPermission();
+    if (!hasPerm) {
+      console.log('READ_STEPS permission is not granted.');
+      return 0;
+    }
+
+    const now = new Date();
+    const startOfDay = new Date(
+      now.getFullYear(),
+      now.getMonth(),
+      now.getDate(),
+      0, 0, 0, 0
+    );
+
+    const timeRangeFilter = {
+      operator: 'between',
+      startTime: startOfDay.toISOString(),
+      endTime: now.toISOString(),
+    };
+
+    // 1. Standard Aggregate 및 Origin 파악
+    const aggregateResult = await getTodayAggregateSteps(timeRangeFilter);
+    const aggregateSteps = aggregateResult.steps;
+    
+    // 2. Phone Steps 조회
+    const phoneSteps = await getTodayPhoneSteps(timeRangeFilter, aggregateResult.dataOrigins);
+
+    // 3. Selection Policy (Phone-first)
+    let selectedSteps = 0;
+    let selectedSource = 'none';
+
+    if (phoneSteps !== null) {
+      selectedSteps = phoneSteps;
+      selectedSource = 'phone';
+    } else if (aggregateSteps !== null) {
+      selectedSteps = aggregateSteps;
+      selectedSource = 'aggregate-fallback';
+    } else {
+      selectedSteps = 0;
+      selectedSource = 'none';
+    }
+
+    // 디버깅 로그 출력
+    console.log('Health aggregate steps:', aggregateSteps !== null ? aggregateSteps : 'null');
+    console.log('Phone steps:', phoneSteps !== null ? phoneSteps : 'null');
+    console.log('Selected step source:', selectedSource);
+    console.log('Selected today steps:', selectedSteps);
+
+    return selectedSteps;
+  } catch (err) {
+    console.error('Failed to get today steps:', err);
+    return 0;
+  }
+}
+
+/**
+ * 오늘 자 활동 데이터를 조회합니다. (실제 걸음수 반영)
+ * @returns {Promise<{date: string, steps: number, goal: number, distance: number|null, calories: number|null, goalCompleted: boolean}>}
+ */
+export async function getTodayActivity() {
+  const todayDateStr = getTodayDateString();
+  const steps = await getTodaySteps();
+  const goal = 10000;
+
+  const todayActivity = {
+    date: todayDateStr,
+    steps: steps,
+    goal: goal,
+    distance: null,
+    calories: null,
+    goalCompleted: steps >= goal,
+  };
+
+  const lastIndex = mockState.weeklyData.length - 1;
+  if (lastIndex >= 0) {
+    mockState.weeklyData[lastIndex] = {
+      ...mockState.weeklyData[lastIndex],
+      steps: steps,
+    };
+  }
+
+  mockState.todayActivity = todayActivity;
+  return { ...todayActivity };
+}
+
+/**
+ * 최근 7일간의 걸음수 데이터 목록을 조회합니다. (Mock 데이터 유지)
  * @returns {Promise<Array<{date: string, steps: number}>>}
  */
 export async function getWeeklyActivity() {
-  await new Promise((resolve) => setTimeout(resolve, 100));
   return [...mockState.weeklyData];
 }
 
@@ -66,30 +282,11 @@ export async function getWeeklyActivity() {
  * @returns {Promise<{today: Object, weekly: Array}>}
  */
 export async function refreshActivity() {
-  await new Promise((resolve) => setTimeout(resolve, 300));
-  
-  const stepIncrement = Math.floor(Math.random() * 500) + 300;
-  const newSteps = mockState.todayActivity.steps + stepIncrement;
-  const goal = mockState.todayActivity.goal;
-
-  mockState.todayActivity = {
-    ...mockState.todayActivity,
-    steps: newSteps,
-    distance: parseFloat((newSteps * 0.0007).toFixed(1)),
-    calories: Math.round(newSteps * 0.04),
-    goalCompleted: newSteps >= goal,
-  };
-
-  const lastIndex = mockState.weeklyData.length - 1;
-  if (lastIndex >= 0) {
-    mockState.weeklyData[lastIndex] = {
-      ...mockState.weeklyData[lastIndex],
-      steps: newSteps,
-    };
-  }
+  const today = await getTodayActivity();
 
   return {
-    today: { ...mockState.todayActivity },
+    today: today,
     weekly: [...mockState.weeklyData],
   };
 }
+
