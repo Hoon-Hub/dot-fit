@@ -241,7 +241,7 @@ export async function getTodaySteps() {
 
 /**
  * 오늘 자 활동 데이터를 조회합니다. (실제 걸음수 반영)
- * @returns {Promise<{date: string, steps: number, goal: number, distance: number|null, calories: number|null, goalCompleted: boolean}>}
+ * @returns {Promise<{date: string, steps: number, goal: number, goalCompleted: boolean}>}
  */
 export async function getTodayActivity() {
   const todayDateStr = getTodayDateString();
@@ -252,8 +252,6 @@ export async function getTodayActivity() {
     date: todayDateStr,
     steps: steps,
     goal: goal,
-    distance: null,
-    calories: null,
     goalCompleted: steps >= goal,
   };
 

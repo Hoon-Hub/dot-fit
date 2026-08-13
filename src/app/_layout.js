@@ -10,7 +10,7 @@ export default function RootLayout() {
   return (
     <View style={[styles.container, { backgroundColor: theme.background }]}>
       {/* Status Bar: 겹침 방지 및 테마 대응 */}
-      <StatusBar style={colorScheme === 'dark' ? 'light' : 'dark'} />
+      <StatusBar style="dark" hidden={false} backgroundColor={theme.background} />
       <Stack
         screenOptions={{
           headerShown: false,

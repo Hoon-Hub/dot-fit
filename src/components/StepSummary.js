@@ -8,7 +8,7 @@ export default function StepSummary({ activity, isRefreshing, onRefresh, colorSc
 
   if (!activity) return null;
 
-  const { steps, distance, calories } = activity;
+  const { steps } = activity;
 
   return (
     <View style={styles.container}>
@@ -38,24 +38,7 @@ export default function StepSummary({ activity, isRefreshing, onRefresh, colorSc
         </View>
       </View>
 
-      {/* 보조 지표 (이동 거리 & 운동 칼로리) */}
-      <View style={styles.metricsRow}>
-        <View style={styles.metricItem}>
-          <Text style={[styles.metricValue, { color: theme.text }]}>
-            {distance != null ? `${distance} km` : '-- km'}
-          </Text>
-          <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>이동 거리</Text>
-        </View>
-        
-        <View style={[styles.metricDivider, { backgroundColor: theme.border }]} />
-        
-        <View style={styles.metricItem}>
-          <Text style={[styles.metricValue, { color: theme.text }]}>
-            {calories != null ? `${calories} kcal` : '-- kcal'}
-          </Text>
-          <Text style={[styles.metricLabel, { color: theme.textSecondary }]}>운동 칼로리</Text>
-        </View>
-      </View>
+
     </View>
   );
 }
@@ -98,25 +81,5 @@ const styles = StyleSheet.create({
     fontSize: 20,
     fontWeight: '700',
   },
-  metricsRow: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    marginTop: Spacing.xs,
-  },
-  metricItem: {
-    marginRight: Spacing.md,
-  },
-  metricValue: {
-    fontSize: 16,
-    fontWeight: '700',
-  },
-  metricLabel: {
-    fontSize: 12,
-    marginTop: 2,
-  },
-  metricDivider: {
-    width: 1,
-    height: 24,
-    marginRight: Spacing.md,
-  },
+
 });
