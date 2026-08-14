@@ -14,6 +14,7 @@ import StepSummary from '../../components/StepSummary';
 import CharacterSection from '../../components/CharacterSection';
 import GoalProgress from '../../components/GoalProgress';
 import WeeklyActivity from '../../components/WeeklyActivity';
+import OwnedAchievements from '../../components/OwnedAchievements';
 import {
   initializeHealthConnect,
   hasStepPermission,
@@ -29,6 +30,7 @@ import {
   getCoinWallet,
 } from '../../services/rewardService';
 import { formatNumber } from '../../utils/dateUtils';
+import { getAchievementsFromWallet } from '../../services/achievementService';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -40,6 +42,7 @@ export default function HomeScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
   const [coinBalance, setCoinBalance] = useState(0);
+  const [achievements, setAchievements] = useState([]);
   const [rewardMessage, setRewardMessage] = useState('');
   const [pendingGoal, setPendingGoal] = useState(null);
   const isMountedRef = useRef(true);
@@ -73,6 +76,7 @@ export default function HomeScreen() {
     if (!isMountedRef.current) return;
 
     setCoinBalance(result.wallet.balance);
+    setAchievements(getAchievementsFromWallet(result.wallet));
     if (result.awardedTransactions.length > 0) {
       const awardedCoins = result.awardedTransactions.reduce(
         (total, transaction) => total + transaction.coins,
@@ -96,7 +100,10 @@ export default function HomeScreen() {
       hasCachedWeeklyData = Boolean(cachedWeekly);
 
       if (!goalState) throw new Error('Step goal is not configured.');
-      if (isMountedRef.current) setCoinBalance(wallet.balance);
+      if (isMountedRef.current) {
+        setCoinBalance(wallet.balance);
+        setAchievements(getAchievementsFromWallet(wallet));
+      }
 
       if (cachedWeekly && isMountedRef.current) {
         const cachedToday = cachedWeekly[cachedWeekly.length - 1];
@@ -177,6 +184,7 @@ export default function HomeScreen() {
         .then(([wallet, goalState]) => {
           if (!isActive || !isMountedRef.current) return;
           setCoinBalance(wallet.balance);
+          setAchievements(getAchievementsFromWallet(wallet));
           setPendingGoal(
             goalState?.pendingGoalSteps
               ? {
@@ -288,6 +296,11 @@ export default function HomeScreen() {
           {/* 4. 최근 7일 가로 카드 UI (스크롤 시 노출) */}
           <WeeklyActivity
             weeklyData={weeklyData}
+            colorScheme={colorScheme}
+          />
+
+          <OwnedAchievements
+            achievements={achievements}
             colorScheme={colorScheme}
           />
         </View>

@@ -18,42 +18,39 @@ export default function StepSummary({
 
   return (
     <View style={styles.container}>
-      <View style={styles.topActions}>
-        <TouchableOpacity
-          style={styles.refreshIconButton}
-          onPress={onRefresh}
-          disabled={isRefreshing}
-          activeOpacity={0.7}
-          accessibilityLabel="걸음수 새로고침"
-          accessibilityRole="button"
-        >
-          {isRefreshing ? (
-            <ActivityIndicator size="small" color={theme.primary} />
-          ) : (
-            <Text style={[styles.refreshIcon, { color: theme.primary }]}>↻</Text>
-          )}
-        </TouchableOpacity>
-
-        <View
-          style={[styles.coinBalance, { backgroundColor: theme.card, borderColor: theme.border }]}
-          accessibilityLabel={`보유 코인 ${coinBalance}개`}
-        >
-          <Text style={styles.coinIcon}>🪙</Text>
-          <Text style={[styles.coinText, { color: theme.text }]}>{formatNumber(coinBalance)}</Text>
-        </View>
-      </View>
-
-      {/* 메인 걸음수 영역 */}
-      <View style={styles.stepContainer}>
+      <View style={styles.summaryRow}>
         <View style={styles.stepNumberRow}>
           <Text style={[styles.stepCount, { color: theme.text }]}>
             {formatNumber(steps)}
           </Text>
           <Text style={[styles.stepUnit, { color: theme.textSecondary }]}>걸음</Text>
         </View>
+
+        <View style={styles.topActions}>
+          <TouchableOpacity
+            style={styles.refreshIconButton}
+            onPress={onRefresh}
+            disabled={isRefreshing}
+            activeOpacity={0.7}
+            accessibilityLabel="걸음수 새로고침"
+            accessibilityRole="button"
+          >
+            {isRefreshing ? (
+              <ActivityIndicator size="small" color={theme.primary} />
+            ) : (
+              <Text style={[styles.refreshIcon, { color: theme.primary }]}>↻</Text>
+            )}
+          </TouchableOpacity>
+
+          <View
+            style={[styles.coinBalance, { backgroundColor: theme.card, borderColor: theme.border }]}
+            accessibilityLabel={`보유 코인 ${coinBalance}개`}
+          >
+            <Text style={styles.coinIcon}>🪙</Text>
+            <Text style={[styles.coinText, { color: theme.text }]}>{formatNumber(coinBalance)}</Text>
+          </View>
+        </View>
       </View>
-
-
     </View>
   );
 }
@@ -61,16 +58,18 @@ export default function StepSummary({
 const styles = StyleSheet.create({
   container: {
     paddingVertical: Spacing.sm,
-    position: 'relative',
+  },
+  summaryRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: Spacing.sm,
   },
   topActions: {
-    position: 'absolute',
-    top: 0,
-    right: 0,
     flexDirection: 'row',
     alignItems: 'center',
     gap: Spacing.xs,
-    zIndex: 10,
+    flexShrink: 0,
   },
   refreshIconButton: {
     width: 44,
@@ -82,15 +81,11 @@ const styles = StyleSheet.create({
     fontSize: 22,
     fontWeight: '700',
   },
-  stepContainer: {
-    alignItems: 'flex-start',
-    marginTop: Spacing.xl,
-    marginBottom: Spacing.sm,
-  },
   stepNumberRow: {
     flexDirection: 'row',
     alignItems: 'baseline',
     gap: 8,
+    flexShrink: 1,
   },
   stepCount: {
     fontSize: 48,
@@ -119,5 +114,4 @@ const styles = StyleSheet.create({
     fontSize: 15,
     fontWeight: '800',
   },
-
 });
