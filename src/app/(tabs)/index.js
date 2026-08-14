@@ -1,4 +1,4 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useEffect, useCallback, useRef } from 'react';
 import {
   StyleSheet,
   ScrollView,
@@ -18,10 +18,11 @@ import {
   hasStepPermission,
   requestStepPermission,
   getTodayActivity,
-  getWeeklyActivity,
+  getCachedWeeklyActivity,
   refreshActivity,
 } from '../../services/healthService';
 import { Colors, Spacing, MaxContentWidth } from '../../constants/theme';
+import { DAILY_GOAL_STEPS } from '../../constants/activity';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -32,36 +33,90 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const isMountedRef = useRef(true);
 
-  const loadInitialData = useCallback(async () => {
-    try {
-      setLoading(true);
-      setError(null);
-
-      const isInitialized = await initializeHealthConnect();
-      if (isInitialized) {
-        const hasPerm = await hasStepPermission();
-        if (!hasPerm) {
-          await requestStepPermission();
-        }
-      }
-
-      const [today, weekly] = await Promise.all([
-        getTodayActivity(),
-        getWeeklyActivity(),
-      ]);
-      setTodayData(today);
-      setWeeklyData(weekly);
-    } catch (err) {
-      console.error('Failed to load health activity:', err);
-      setError('활동 데이터를 불러오는 중 오류가 발생했습니다.');
-    } finally {
-      setLoading(false);
-    }
+  const updateTodayAndWeekly = useCallback((today) => {
+    setTodayData(today);
+    setWeeklyData((currentWeekly) =>
+      currentWeekly.map((item) =>
+        item.date === today.date ? { ...item, steps: today.steps } : item,
+      ),
+    );
   }, []);
 
+  const loadInitialData = useCallback(async () => {
+    let hasCachedWeeklyData = false;
+
+    try {
+      setError(null);
+
+      const cachedWeekly = await getCachedWeeklyActivity();
+      hasCachedWeeklyData = Boolean(cachedWeekly);
+
+      if (cachedWeekly && isMountedRef.current) {
+        const cachedToday = cachedWeekly[cachedWeekly.length - 1];
+        setWeeklyData(cachedWeekly);
+        setTodayData({
+          date: cachedToday.date,
+          steps: cachedToday.steps,
+          goal: DAILY_GOAL_STEPS,
+          goalCompleted: cachedToday.steps >= DAILY_GOAL_STEPS,
+        });
+        setLoading(false);
+        setRefreshing(true);
+      }
+
+      const isInitialized = await initializeHealthConnect();
+      if (!isInitialized) {
+        throw new Error('Health Connect initialization failed.');
+      }
+
+      const hasPermission = await hasStepPermission();
+      if (!hasPermission && !(await requestStepPermission())) {
+        throw new Error('Health Connect step permission is not granted.');
+      }
+
+      if (cachedWeekly) {
+        const today = await getTodayActivity();
+        if (today.date === cachedWeekly[cachedWeekly.length - 1].date) {
+          if (isMountedRef.current) updateTodayAndWeekly(today);
+        } else {
+          const activity = await refreshActivity();
+          if (isMountedRef.current) {
+            setTodayData(activity.today);
+            setWeeklyData(activity.weekly);
+          }
+        }
+      } else {
+        const activity = await refreshActivity();
+        if (isMountedRef.current) {
+          setTodayData(activity.today);
+          setWeeklyData(activity.weekly);
+        }
+      }
+    } catch (err) {
+      console.error('Failed to load health activity:', err);
+      if (isMountedRef.current) {
+        setError('활동 데이터를 불러오는 중 오류가 발생했습니다.');
+      }
+    } finally {
+      if (isMountedRef.current) {
+        setLoading(false);
+        if (hasCachedWeeklyData) setRefreshing(false);
+      }
+    }
+  }, [updateTodayAndWeekly]);
+
   useEffect(() => {
-    loadInitialData();
+    isMountedRef.current = true;
+    const loadTimer = setTimeout(() => {
+      loadInitialData();
+    }, 0);
+
+    return () => {
+      clearTimeout(loadTimer);
+      isMountedRef.current = false;
+    };
   }, [loadInitialData]);
 
   const handleRefresh = useCallback(async () => {
@@ -69,13 +124,17 @@ export default function HomeScreen() {
       setRefreshing(true);
       setError(null);
       const updated = await refreshActivity();
-      setTodayData(updated.today);
-      setWeeklyData(updated.weekly);
+      if (isMountedRef.current) {
+        setTodayData(updated.today);
+        setWeeklyData(updated.weekly);
+      }
     } catch (err) {
       console.error('Failed to refresh health activity:', err);
-      setError('데이터 새로고침에 실패했습니다.');
+      if (isMountedRef.current) {
+        setError('데이터 새로고침에 실패했습니다.');
+      }
     } finally {
-      setRefreshing(false);
+      if (isMountedRef.current) setRefreshing(false);
     }
   }, []);
 
@@ -127,7 +186,7 @@ export default function HomeScreen() {
           {/* 3. 목표 진행률 및 Progress Bar */}
           <GoalProgress
             steps={todayData?.steps || 0}
-            goal={todayData?.goal || 10000}
+            goal={todayData?.goal || DAILY_GOAL_STEPS}
             colorScheme={colorScheme}
           />
 
@@ -137,7 +196,7 @@ export default function HomeScreen() {
           {/* 4. 최근 7일 가로 카드 UI (스크롤 시 노출) */}
           <WeeklyActivity
             weeklyData={weeklyData}
-            dailyGoal={todayData?.goal || 10000}
+            dailyGoal={todayData?.goal || DAILY_GOAL_STEPS}
             colorScheme={colorScheme}
           />
         </View>

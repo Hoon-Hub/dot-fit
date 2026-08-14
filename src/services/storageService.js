@@ -73,3 +73,38 @@ export async function saveCharacter(characterObj) {
     return false;
   }
 }
+
+export async function getWeeklyActivityCache() {
+  try {
+    const jsonStr = await AsyncStorage.getItem(STORAGE_KEYS.WEEKLY_ACTIVITY_CACHE);
+    if (!jsonStr) return null;
+
+    const cache = JSON.parse(jsonStr);
+    if (
+      !cache ||
+      cache.version !== 1 ||
+      typeof cache.dateKey !== 'string' ||
+      !Array.isArray(cache.items)
+    ) {
+      return null;
+    }
+
+    return cache;
+  } catch (err) {
+    console.error('Failed to get weekly activity cache:', err);
+    return null;
+  }
+}
+
+export async function saveWeeklyActivityCache(cache) {
+  try {
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.WEEKLY_ACTIVITY_CACHE,
+      JSON.stringify(cache),
+    );
+    return true;
+  } catch (err) {
+    console.error('Failed to save weekly activity cache:', err);
+    return false;
+  }
+}

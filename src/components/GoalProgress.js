@@ -1,9 +1,10 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Spacing } from '../constants/theme';
+import { DAILY_GOAL_STEPS } from '../constants/activity';
 import { formatNumber } from '../utils/dateUtils';
 
-export default function GoalProgress({ steps = 0, goal = 10000, colorScheme = 'light' }) {
+export default function GoalProgress({ steps = 0, goal = DAILY_GOAL_STEPS, colorScheme = 'light' }) {
   const theme = Colors[colorScheme] || Colors.light;
 
   const rawPercentage = goal > 0 ? Math.round((steps / goal) * 100) : 0;
