@@ -12,13 +12,11 @@
     },
     "android": {
       "package": "com.sh.dotfit",
-      "permissions": [
-        "android.permission.health.READ_STEPS"
-      ],
+      "permissions": ["android.permission.health.READ_STEPS"],
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",
-        "backgroundImage": "./assets/images/android-icon-background.png",
+        "backgroundImage": "#F8F8F5",
         "monochromeImage": "./assets/images/android-icon-monochrome.png"
       },
       "predictiveBackGestureEnabled": false
