@@ -1,17 +1,33 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import { View, Text, StyleSheet, useWindowDimensions } from 'react-native';
 import { Colors, Spacing } from '../constants/theme';
+import { getCharacter } from '../services/storageService';
 
 /**
  * CharacterSection Component
  * 
  * 메인 사람 캐릭터 표시 영역입니다.
  * 화면 높이의 약 30%를 점유하며 (min 200px, max 320px),
- * 향후 사용자의 걸음수 및 활동 상태에 맞춰 외형이 변화할 전용 공간을 제공합니다.
+ * 사용자의 생성 캐릭터 이름과 외형 공간을 제공합니다.
  */
 export default function CharacterSection({ colorScheme = 'light' }) {
   const theme = Colors[colorScheme] || Colors.light;
   const { height: screenHeight } = useWindowDimensions();
+  const [characterName, setCharacterName] = useState('');
+
+  useEffect(() => {
+    let isMounted = true;
+    async function loadChar() {
+      const char = await getCharacter();
+      if (isMounted && char && char.name) {
+        setCharacterName(char.name);
+      }
+    }
+    loadChar();
+    return () => {
+      isMounted = false;
+    };
+  }, []);
 
   // 화면 높이의 약 30% 계산 (적정 min/max 제약 적용)
   const containerHeight = Math.min(320, Math.max(200, Math.round(screenHeight * 0.3)));
@@ -35,9 +51,19 @@ export default function CharacterSection({ colorScheme = 'light' }) {
             <Text style={styles.characterEmoji}>🏃</Text>
           </View>
 
+          {Boolean(characterName) && (
+            <View style={[styles.nameBadge, { backgroundColor: theme.todayHighlight }]}>
+              <Text style={[styles.nameBadgeText, { color: theme.primary }]}>
+                {characterName}
+              </Text>
+            </View>
+          )}
+
           {/* 은은한 캐릭터 상태 메시지 */}
           <Text style={[styles.characterStatusText, { color: theme.textSecondary }]}>
-            "오늘도 활기차게 함께 걸어요!"
+            {characterName
+              ? `"${characterName}(와) 함께 활기차게 걸어요!"`
+              : '"오늘도 활기차게 함께 걸어요!"'}
           </Text>
         </View>
       </View>
@@ -79,5 +105,15 @@ const styles = StyleSheet.create({
     fontWeight: '500',
     fontStyle: 'italic',
     marginTop: 4,
+  },
+  nameBadge: {
+    paddingHorizontal: 12,
+    paddingVertical: 4,
+    borderRadius: 12,
+    marginTop: 2,
+  },
+  nameBadgeText: {
+    fontSize: 14,
+    fontWeight: '700',
   },
 });
