@@ -7,7 +7,10 @@ import {
 } from 'react-native-health-connect';
 import {
   getDateKeyFromHealthConnectBucket,
+  addLocalDays,
+  getDateKeysBetween,
   getLocalDateKey,
+  parseLocalDateKey,
   getRecentDateKeys,
   getStartOfLocalDay,
   getTodayDateString,
@@ -16,7 +19,6 @@ import {
   getWeeklyActivityCache,
   saveWeeklyActivityCache,
 } from './storageService';
-import { DAILY_GOAL_STEPS } from '../constants/activity';
 
 const WEEKLY_CACHE_VERSION = 1;
 const WEEK_LENGTH = 7;
@@ -74,8 +76,6 @@ function createTodayActivity(steps, date = getTodayDateString()) {
   return {
     date,
     steps,
-    goal: DAILY_GOAL_STEPS,
-    goalCompleted: steps >= DAILY_GOAL_STEPS,
   };
 }
 
@@ -84,20 +84,6 @@ function getPhoneOrigins(availableOrigins) {
     (origin) =>
       origin === 'android' || origin.startsWith('com.android.healthconnect.phone.'),
   );
-}
-
-function createWeeklyTimeRange(now = new Date()) {
-  const startOfToday = getStartOfLocalDay(now);
-  const startOfRange = new Date(startOfToday);
-  startOfRange.setDate(startOfToday.getDate() - (WEEK_LENGTH - 1));
-
-  return {
-    operator: 'between',
-    // The native module converts these instants to the device's local date-time
-    // before applying the period slicer.
-    startTime: startOfRange.toISOString(),
-    endTime: now.toISOString(),
-  };
 }
 
 async function ensureStepReadAccess() {
@@ -232,11 +218,33 @@ function getOriginsFromGroups(groups) {
 }
 
 async function fetchWeeklyActivity() {
-  await ensureStepReadAccess();
-
   const now = new Date();
   const dateKeys = getRecentDateKeys(WEEK_LENGTH, now);
-  const timeRangeFilter = createWeeklyTimeRange(now);
+  return getDailyStepsBetween(dateKeys[0], dateKeys[dateKeys.length - 1], now);
+}
+
+export async function getDailyStepsBetween(
+  startDateKey,
+  endDateKey,
+  referenceDate = new Date(),
+) {
+  await ensureStepReadAccess();
+
+  const dateKeys = getDateKeysBetween(startDateKey, endDateKey);
+  const startDate = parseLocalDateKey(startDateKey);
+  const dayAfterEnd = addLocalDays(endDateKey, 1);
+  const endDate = parseLocalDateKey(dayAfterEnd);
+
+  if (dateKeys.length === 0 || !startDate || !endDate) {
+    throw new Error('Invalid local date range.');
+  }
+
+  const now = referenceDate;
+  const timeRangeFilter = {
+    operator: 'between',
+    startTime: startDate.toISOString(),
+    endTime: endDateKey === getLocalDateKey(now) ? now.toISOString() : endDate.toISOString(),
+  };
   const aggregateGroups = await getGroupedSteps(timeRangeFilter);
   const aggregateStepsByDate = mapGroupedSteps(aggregateGroups);
   const phoneOrigins = getPhoneOrigins(getOriginsFromGroups(aggregateGroups));

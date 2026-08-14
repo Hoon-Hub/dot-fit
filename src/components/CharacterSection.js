@@ -1,7 +1,9 @@
-import { useEffect, useState } from "react";
+import { useFocusEffect, useRouter } from "expo-router";
+import { useCallback, useState } from "react";
 import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
 import { Colors, Spacing } from "../constants/theme";
-import { getCharacter } from "../services/storageService";
+import { getCharacter, getCharacterType } from "../services/storageService";
+import PixelCharacter from "./PixelCharacter";
 
 /**
  * CharacterSection Component
@@ -11,23 +13,41 @@ import { getCharacter } from "../services/storageService";
  * 사용자의 생성 캐릭터 이름과 외형 공간을 제공합니다.
  */
 export default function CharacterSection({ colorScheme = "light" }) {
+  const router = useRouter();
   const theme = Colors[colorScheme] || Colors.light;
   const { height: screenHeight } = useWindowDimensions();
   const [characterName, setCharacterName] = useState("");
+  const [characterType, setCharacterType] = useState(null);
 
-  useEffect(() => {
-    let isMounted = true;
-    async function loadChar() {
-      const char = await getCharacter();
-      if (isMounted && char && char.name) {
-        setCharacterName(char.name);
+  useFocusEffect(
+    useCallback(() => {
+      let isMounted = true;
+
+      async function loadChar() {
+        const [char, storedType] = await Promise.all([
+          getCharacter(),
+          getCharacterType(),
+        ]);
+        if (!isMounted) return;
+
+        if (!storedType) {
+          router.replace('/onboarding/character-type');
+          return;
+        }
+
+        setCharacterType(storedType);
+        if (isMounted && char && char.name) {
+          setCharacterName(char.name);
+        }
       }
-    }
-    loadChar();
-    return () => {
-      isMounted = false;
-    };
-  }, []);
+
+      loadChar();
+
+      return () => {
+        isMounted = false;
+      };
+    }, [router]),
+  );
 
   // 화면 높이의 약 30% 계산 (적정 min/max 제약 적용)
   const containerHeight = Math.min(
@@ -49,16 +69,6 @@ export default function CharacterSection({ colorScheme = "light" }) {
       >
         {/* 사람 캐릭터 Visual Placeholder Container */}
         <View style={styles.characterContent}>
-          <View
-            style={[
-              styles.avatarContainer,
-              { backgroundColor: theme.todayHighlight },
-            ]}
-          >
-            {/* 사람 캐릭터 Silhouette / Avatar Figure */}
-            <Text style={styles.characterEmoji}>🏃</Text>
-          </View>
-
           {Boolean(characterName) && (
             <View
               style={[
@@ -71,6 +81,8 @@ export default function CharacterSection({ colorScheme = "light" }) {
               </Text>
             </View>
           )}
+
+          <PixelCharacter type={characterType} size="large" />
 
           {/* 은은한 캐릭터 상태 메시지 */}
           <Text
@@ -105,16 +117,6 @@ const styles = StyleSheet.create({
     justifyContent: "center",
     gap: Spacing.sm,
   },
-  avatarContainer: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: "center",
-    justifyContent: "center",
-  },
-  characterEmoji: {
-    fontSize: 56,
-  },
   characterStatusText: {
     fontSize: 13,
     fontWeight: "500",
@@ -125,7 +127,7 @@ const styles = StyleSheet.create({
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    marginTop: 2,
+    marginBottom: 2,
   },
   nameBadgeText: {
     fontSize: 14,

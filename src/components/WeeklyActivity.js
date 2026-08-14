@@ -2,7 +2,6 @@ import React, { useCallback, useEffect, useRef } from 'react';
 import { AppState, View, Text, StyleSheet, ScrollView } from 'react-native';
 import { useFocusEffect } from 'expo-router';
 import { Colors, Spacing } from '../constants/theme';
-import { DAILY_GOAL_STEPS } from '../constants/activity';
 import {
   getDayOfWeekShort,
   formatShortDate,
@@ -17,7 +16,7 @@ const weeklyScrollMemory = {
   offsetX: 0,
 };
 
-export default function WeeklyActivity({ weeklyData = [], dailyGoal = DAILY_GOAL_STEPS, colorScheme = 'light' }) {
+export default function WeeklyActivity({ weeklyData = [], colorScheme = 'light' }) {
   const theme = Colors[colorScheme] || Colors.light;
   const scrollViewRef = useRef(null);
   const itemLayoutsRef = useRef(new Map());
@@ -156,7 +155,7 @@ export default function WeeklyActivity({ weeklyData = [], dailyGoal = DAILY_GOAL
           const itemIsToday = isToday(item.date);
           const dayName = getDayOfWeekShort(item.date);
           const shortDate = formatShortDate(item.date);
-          const isGoalAchieved = item.steps >= dailyGoal;
+          const isGoalAchieved = item.goalSteps && item.steps >= item.goalSteps;
           const activityStatus = isGoalAchieved
             ? theme.activityAchieved
             : theme.activityDefault;

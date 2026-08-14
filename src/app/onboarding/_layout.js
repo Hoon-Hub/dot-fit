@@ -16,7 +16,9 @@ export default function OnboardingLayout() {
     >
       <Stack.Screen name="intro" options={{ headerShown: false }} />
       <Stack.Screen name="health-connect" options={{ headerShown: false }} />
+      <Stack.Screen name="character-type" options={{ headerShown: false }} />
       <Stack.Screen name="character" options={{ headerShown: false }} />
+      <Stack.Screen name="step-goal" options={{ headerShown: false }} />
     </Stack>
   );
 }

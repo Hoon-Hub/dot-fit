@@ -1,15 +1,18 @@
 import React from 'react';
 import { View, Text, StyleSheet } from 'react-native';
 import { Colors, Spacing } from '../constants/theme';
-import { DAILY_GOAL_STEPS } from '../constants/activity';
+import { getStepGoalOption } from '../constants/activity';
 import { formatNumber } from '../utils/dateUtils';
 
-export default function GoalProgress({ steps = 0, goal = DAILY_GOAL_STEPS, colorScheme = 'light' }) {
+export default function GoalProgress({ steps = 0, goal, colorScheme = 'light' }) {
   const theme = Colors[colorScheme] || Colors.light;
+
+  if (!goal) return null;
 
   const rawPercentage = goal > 0 ? Math.round((steps / goal) * 100) : 0;
   const clampedPercentage = Math.min(100, Math.max(0, rawPercentage));
   const isGoalReached = steps >= goal;
+  const rewardCoins = getStepGoalOption(goal)?.rewardCoins;
 
   return (
     <View style={styles.container}>
@@ -22,6 +25,12 @@ export default function GoalProgress({ steps = 0, goal = DAILY_GOAL_STEPS, color
           {rawPercentage}%
         </Text>
       </View>
+
+      {rewardCoins && (
+        <Text style={[styles.rewardText, { color: theme.textSecondary }]}>
+          달성 보상 🪙 {rewardCoins}
+        </Text>
+      )}
 
       {/* Progress Bar (width capped at 100%) */}
       <View style={[styles.progressTrack, { backgroundColor: theme.progressTrack }]}>
@@ -71,6 +80,11 @@ const styles = StyleSheet.create({
     borderRadius: 5,
     overflow: 'hidden',
     width: '100%',
+  },
+  rewardText: {
+    fontSize: 12,
+    fontWeight: '600',
+    marginBottom: Spacing.xs,
   },
   progressFill: {
     height: '100%',

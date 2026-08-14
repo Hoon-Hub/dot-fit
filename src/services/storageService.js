@@ -1,5 +1,6 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
+import { isCharacterType } from '../constants/profile';
 
 /**
  * Storage Service
@@ -70,6 +71,68 @@ export async function saveCharacter(characterObj) {
     return true;
   } catch (err) {
     console.error('Failed to save character:', err);
+    return false;
+  }
+}
+
+export async function getCharacterType() {
+  try {
+    const value = await AsyncStorage.getItem(STORAGE_KEYS.CHARACTER_TYPE);
+    return isCharacterType(value) ? value : null;
+  } catch (err) {
+    console.error('Failed to get character type from storage:', err);
+    return null;
+  }
+}
+
+export async function saveCharacterType(characterType) {
+  if (!isCharacterType(characterType)) return false;
+
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.CHARACTER_TYPE, characterType);
+    return true;
+  } catch (err) {
+    console.error('Failed to save character type:', err);
+    return false;
+  }
+}
+
+export async function getStoredStepGoal() {
+  try {
+    const jsonStr = await AsyncStorage.getItem(STORAGE_KEYS.STEP_GOAL);
+    return jsonStr ? JSON.parse(jsonStr) : null;
+  } catch (err) {
+    console.error('Failed to get step goal from storage:', err);
+    return null;
+  }
+}
+
+export async function saveStoredStepGoal(goalState) {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.STEP_GOAL, JSON.stringify(goalState));
+    return true;
+  } catch (err) {
+    console.error('Failed to save step goal:', err);
+    return false;
+  }
+}
+
+export async function getStoredCoinWallet() {
+  try {
+    const jsonStr = await AsyncStorage.getItem(STORAGE_KEYS.COIN_WALLET);
+    return jsonStr ? JSON.parse(jsonStr) : null;
+  } catch (err) {
+    console.error('Failed to get coin wallet from storage:', err);
+    return null;
+  }
+}
+
+export async function saveStoredCoinWallet(wallet) {
+  try {
+    await AsyncStorage.setItem(STORAGE_KEYS.COIN_WALLET, JSON.stringify(wallet));
+    return true;
+  } catch (err) {
+    console.error('Failed to save coin wallet:', err);
     return false;
   }
 }

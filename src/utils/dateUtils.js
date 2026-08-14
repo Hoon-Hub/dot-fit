@@ -8,8 +8,8 @@ const KOREAN_DAYS = ['일', '월', '화', '수', '목', '금', '토'];
  * 로컬 기준 오늘 날짜를 'YYYY-MM-DD' 형식으로 반환합니다.
  * @returns {string} 예: '2026-08-12'
  */
-export function getTodayDateString() {
-  return getLocalDateKey(new Date());
+export function getTodayDateString(referenceDate = new Date()) {
+  return getLocalDateKey(referenceDate);
 }
 
 export function getLocalDateKey(date) {
@@ -21,6 +21,42 @@ export function getLocalDateKey(date) {
 
 export function getStartOfLocalDay(date = new Date()) {
   return new Date(date.getFullYear(), date.getMonth(), date.getDate());
+}
+
+export function parseLocalDateKey(dateKey) {
+  if (typeof dateKey !== 'string' || !/^\d{4}-\d{2}-\d{2}$/.test(dateKey)) {
+    return null;
+  }
+
+  const [year, month, day] = dateKey.split('-').map(Number);
+  const date = new Date(year, month - 1, day);
+
+  if (getLocalDateKey(date) !== dateKey) return null;
+  return date;
+}
+
+export function addLocalDays(dateKey, days) {
+  const date = parseLocalDateKey(dateKey);
+  if (!date || !Number.isInteger(days)) return null;
+
+  date.setDate(date.getDate() + days);
+  return getLocalDateKey(date);
+}
+
+export function getDateKeysBetween(startDateKey, endDateKey) {
+  const startDate = parseLocalDateKey(startDateKey);
+  const endDate = parseLocalDateKey(endDateKey);
+  if (!startDate || !endDate || startDate > endDate) return [];
+
+  const dateKeys = [];
+  const currentDate = new Date(startDate);
+
+  while (currentDate <= endDate) {
+    dateKeys.push(getLocalDateKey(currentDate));
+    currentDate.setDate(currentDate.getDate() + 1);
+  }
+
+  return dateKeys;
 }
 
 export function getRecentDateKeys(days = 7, referenceDate = new Date()) {

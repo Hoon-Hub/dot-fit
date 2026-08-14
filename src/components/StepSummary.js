@@ -3,7 +3,13 @@ import { ActivityIndicator, StyleSheet, Text, TouchableOpacity, View } from 'rea
 import { Colors, Spacing } from '../constants/theme';
 import { formatNumber } from '../utils/dateUtils';
 
-export default function StepSummary({ activity, isRefreshing, onRefresh, colorScheme = 'light' }) {
+export default function StepSummary({
+  activity,
+  coinBalance = 0,
+  isRefreshing,
+  onRefresh,
+  colorScheme = 'light',
+}) {
   const theme = Colors[colorScheme] || Colors.light;
 
   if (!activity) return null;
@@ -12,21 +18,30 @@ export default function StepSummary({ activity, isRefreshing, onRefresh, colorSc
 
   return (
     <View style={styles.container}>
-      {/* 우측 상단 독립 배치된 새로고침 아이콘 버튼 */}
-      <TouchableOpacity
-        style={styles.refreshIconButton}
-        onPress={onRefresh}
-        disabled={isRefreshing}
-        activeOpacity={0.7}
-        accessibilityLabel="걸음수 새로고침"
-        accessibilityRole="button"
-      >
-        {isRefreshing ? (
-          <ActivityIndicator size="small" color={theme.primary} />
-        ) : (
-          <Text style={[styles.refreshIcon, { color: theme.primary }]}>↻</Text>
-        )}
-      </TouchableOpacity>
+      <View style={styles.topActions}>
+        <TouchableOpacity
+          style={styles.refreshIconButton}
+          onPress={onRefresh}
+          disabled={isRefreshing}
+          activeOpacity={0.7}
+          accessibilityLabel="걸음수 새로고침"
+          accessibilityRole="button"
+        >
+          {isRefreshing ? (
+            <ActivityIndicator size="small" color={theme.primary} />
+          ) : (
+            <Text style={[styles.refreshIcon, { color: theme.primary }]}>↻</Text>
+          )}
+        </TouchableOpacity>
+
+        <View
+          style={[styles.coinBalance, { backgroundColor: theme.card, borderColor: theme.border }]}
+          accessibilityLabel={`보유 코인 ${coinBalance}개`}
+        >
+          <Text style={styles.coinIcon}>🪙</Text>
+          <Text style={[styles.coinText, { color: theme.text }]}>{formatNumber(coinBalance)}</Text>
+        </View>
+      </View>
 
       {/* 메인 걸음수 영역 */}
       <View style={styles.stepContainer}>
@@ -48,15 +63,20 @@ const styles = StyleSheet.create({
     paddingVertical: Spacing.sm,
     position: 'relative',
   },
-  refreshIconButton: {
+  topActions: {
     position: 'absolute',
     top: 0,
     right: 0,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: Spacing.xs,
+    zIndex: 10,
+  },
+  refreshIconButton: {
     width: 44,
     height: 44,
     alignItems: 'center',
     justifyContent: 'center',
-    zIndex: 10,
   },
   refreshIcon: {
     fontSize: 22,
@@ -64,7 +84,7 @@ const styles = StyleSheet.create({
   },
   stepContainer: {
     alignItems: 'flex-start',
-    marginTop: Spacing.xs,
+    marginTop: Spacing.xl,
     marginBottom: Spacing.sm,
   },
   stepNumberRow: {
@@ -80,6 +100,24 @@ const styles = StyleSheet.create({
   stepUnit: {
     fontSize: 20,
     fontWeight: '700',
+  },
+  coinBalance: {
+    minHeight: 36,
+    minWidth: 66,
+    borderWidth: 1,
+    borderRadius: 18,
+    paddingHorizontal: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 5,
+  },
+  coinIcon: {
+    fontSize: 16,
+  },
+  coinText: {
+    fontSize: 15,
+    fontWeight: '800',
   },
 
 });

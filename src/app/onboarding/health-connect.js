@@ -16,7 +16,8 @@ import {
   hasStepPermission,
   requestStepPermission,
 } from '../../services/healthService';
-import { getCharacter } from '../../services/storageService';
+import { getCharacter, getCharacterType } from '../../services/storageService';
+import { getGoalState } from '../../services/goalService';
 
 export default function HealthConnectScreen() {
   const router = useRouter();
@@ -44,9 +45,15 @@ export default function HealthConnectScreen() {
       }
 
       if (hasPerm) {
-        const character = await getCharacter();
-        if (character && character.name) {
-          router.replace('/(tabs)');
+        const [character, characterType] = await Promise.all([
+          getCharacter(),
+          getCharacterType(),
+        ]);
+        if (!characterType) {
+          router.replace('/onboarding/character-type');
+        } else if (character && character.name) {
+          const goalState = await getGoalState();
+          router.replace(goalState ? '/(tabs)' : '/onboarding/step-goal');
         } else {
           router.replace('/onboarding/character');
         }

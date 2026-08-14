@@ -9,6 +9,7 @@ import {
   useColorScheme,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
+import { useFocusEffect } from 'expo-router';
 import StepSummary from '../../components/StepSummary';
 import CharacterSection from '../../components/CharacterSection';
 import GoalProgress from '../../components/GoalProgress';
@@ -22,7 +23,12 @@ import {
   refreshActivity,
 } from '../../services/healthService';
 import { Colors, Spacing, MaxContentWidth } from '../../constants/theme';
-import { DAILY_GOAL_STEPS } from '../../constants/activity';
+import { getGoalForDate, getGoalState } from '../../services/goalService';
+import {
+  evaluateDailyStepRewards,
+  getCoinWallet,
+} from '../../services/rewardService';
+import { formatNumber } from '../../utils/dateUtils';
 
 export default function HomeScreen() {
   const colorScheme = useColorScheme();
@@ -33,15 +39,47 @@ export default function HomeScreen() {
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
+  const [coinBalance, setCoinBalance] = useState(0);
+  const [rewardMessage, setRewardMessage] = useState('');
+  const [pendingGoal, setPendingGoal] = useState(null);
   const isMountedRef = useRef(true);
 
-  const updateTodayAndWeekly = useCallback((today) => {
+  const applyGoalData = useCallback((activity, goalState) => {
+    const weekly = activity.weekly.map((item) => ({
+      ...item,
+      goalSteps: getGoalForDate(goalState, item.date),
+    }));
+    const goal = getGoalForDate(goalState, activity.today.date);
+    const today = {
+      ...activity.today,
+      goal,
+      goalCompleted: Boolean(goal && activity.today.steps >= goal),
+    };
+
     setTodayData(today);
-    setWeeklyData((currentWeekly) =>
-      currentWeekly.map((item) =>
-        item.date === today.date ? { ...item, steps: today.steps } : item,
-      ),
+    setWeeklyData(weekly);
+    setPendingGoal(
+      goalState.pendingGoalSteps
+        ? {
+            steps: goalState.pendingGoalSteps,
+            effectiveDate: goalState.pendingEffectiveDate,
+          }
+        : null,
     );
+  }, []);
+
+  const applyRewards = useCallback(async (activityItems) => {
+    const result = await evaluateDailyStepRewards(activityItems);
+    if (!isMountedRef.current) return;
+
+    setCoinBalance(result.wallet.balance);
+    if (result.awardedTransactions.length > 0) {
+      const awardedCoins = result.awardedTransactions.reduce(
+        (total, transaction) => total + transaction.coins,
+        0,
+      );
+      setRewardMessage(`목표 달성! 🪙 ${awardedCoins}코인이 지급되었어요.`);
+    }
   }, []);
 
   const loadInitialData = useCallback(async () => {
@@ -50,18 +88,25 @@ export default function HomeScreen() {
     try {
       setError(null);
 
-      const cachedWeekly = await getCachedWeeklyActivity();
+      const [cachedWeekly, goalState, wallet] = await Promise.all([
+        getCachedWeeklyActivity(),
+        getGoalState(),
+        getCoinWallet(),
+      ]);
       hasCachedWeeklyData = Boolean(cachedWeekly);
+
+      if (!goalState) throw new Error('Step goal is not configured.');
+      if (isMountedRef.current) setCoinBalance(wallet.balance);
 
       if (cachedWeekly && isMountedRef.current) {
         const cachedToday = cachedWeekly[cachedWeekly.length - 1];
-        setWeeklyData(cachedWeekly);
-        setTodayData({
-          date: cachedToday.date,
-          steps: cachedToday.steps,
-          goal: DAILY_GOAL_STEPS,
-          goalCompleted: cachedToday.steps >= DAILY_GOAL_STEPS,
-        });
+        applyGoalData(
+          {
+            today: { date: cachedToday.date, steps: cachedToday.steps },
+            weekly: cachedWeekly,
+          },
+          goalState,
+        );
         setLoading(false);
         setRefreshing(true);
       }
@@ -79,19 +124,25 @@ export default function HomeScreen() {
       if (cachedWeekly) {
         const today = await getTodayActivity();
         if (today.date === cachedWeekly[cachedWeekly.length - 1].date) {
-          if (isMountedRef.current) updateTodayAndWeekly(today);
+          if (isMountedRef.current) {
+            const updatedWeekly = cachedWeekly.map((item) =>
+              item.date === today.date ? { ...item, steps: today.steps } : item,
+            );
+            applyGoalData({ today, weekly: updatedWeekly }, goalState);
+            await applyRewards(updatedWeekly);
+          }
         } else {
           const activity = await refreshActivity();
           if (isMountedRef.current) {
-            setTodayData(activity.today);
-            setWeeklyData(activity.weekly);
+            applyGoalData(activity, goalState);
+            await applyRewards(activity.weekly);
           }
         }
       } else {
         const activity = await refreshActivity();
         if (isMountedRef.current) {
-          setTodayData(activity.today);
-          setWeeklyData(activity.weekly);
+          applyGoalData(activity, goalState);
+          await applyRewards(activity.weekly);
         }
       }
     } catch (err) {
@@ -105,7 +156,7 @@ export default function HomeScreen() {
         if (hasCachedWeeklyData) setRefreshing(false);
       }
     }
-  }, [updateTodayAndWeekly]);
+  }, [applyGoalData, applyRewards]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -119,14 +170,42 @@ export default function HomeScreen() {
     };
   }, [loadInitialData]);
 
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+      Promise.all([getCoinWallet(), getGoalState()])
+        .then(([wallet, goalState]) => {
+          if (!isActive || !isMountedRef.current) return;
+          setCoinBalance(wallet.balance);
+          setPendingGoal(
+            goalState?.pendingGoalSteps
+              ? {
+                  steps: goalState.pendingGoalSteps,
+                  effectiveDate: goalState.pendingEffectiveDate,
+                }
+              : null,
+          );
+        })
+        .catch((err) => {
+          console.error('Failed to reload home state:', err);
+        });
+
+      return () => {
+        isActive = false;
+      };
+    }, []),
+  );
+
   const handleRefresh = useCallback(async () => {
     try {
       setRefreshing(true);
       setError(null);
+      setRewardMessage('');
       const updated = await refreshActivity();
       if (isMountedRef.current) {
-        setTodayData(updated.today);
-        setWeeklyData(updated.weekly);
+        const goalState = await getGoalState();
+        applyGoalData(updated, goalState);
+        await applyRewards(updated.weekly);
       }
     } catch (err) {
       console.error('Failed to refresh health activity:', err);
@@ -136,7 +215,7 @@ export default function HomeScreen() {
     } finally {
       if (isMountedRef.current) setRefreshing(false);
     }
-  }, []);
+  }, [applyGoalData, applyRewards]);
 
   if (loading) {
     return (
@@ -172,13 +251,20 @@ export default function HomeScreen() {
             </View>
           )}
 
-          {/* 1. 오늘 걸음수 + 이동거리/운동칼로리 + 우측 상단 새로고침 ↻ */}
+          {/* 1. 오늘 걸음수 + 우측 상단 새로고침 및 보유 코인 */}
           <StepSummary
             activity={todayData}
+            coinBalance={coinBalance}
             isRefreshing={refreshing}
             onRefresh={handleRefresh}
             colorScheme={colorScheme}
           />
+
+          {Boolean(rewardMessage) && (
+            <View style={[styles.rewardContainer, { backgroundColor: theme.todayHighlight, borderColor: theme.border }]}>
+              <Text style={[styles.rewardText, { color: theme.text }]}>{rewardMessage}</Text>
+            </View>
+          )}
 
           {/* 2. 사람 캐릭터 영역 (화면 높이의 약 30%) */}
           <CharacterSection colorScheme={colorScheme} />
@@ -186,9 +272,15 @@ export default function HomeScreen() {
           {/* 3. 목표 진행률 및 Progress Bar */}
           <GoalProgress
             steps={todayData?.steps || 0}
-            goal={todayData?.goal || DAILY_GOAL_STEPS}
+            goal={todayData?.goal}
             colorScheme={colorScheme}
           />
+
+          {pendingGoal && (
+            <Text style={[styles.pendingGoalText, { color: theme.textSecondary }]}>
+              {pendingGoal.effectiveDate}부터 목표 {formatNumber(pendingGoal.steps)}걸음
+            </Text>
+          )}
 
           {/* 뷰포트 분리 버퍼 여백 */}
           <View style={styles.foldBuffer} />
@@ -196,7 +288,6 @@ export default function HomeScreen() {
           {/* 4. 최근 7일 가로 카드 UI (스크롤 시 노출) */}
           <WeeklyActivity
             weeklyData={weeklyData}
-            dailyGoal={todayData?.goal || DAILY_GOAL_STEPS}
             colorScheme={colorScheme}
           />
         </View>
@@ -235,6 +326,22 @@ const styles = StyleSheet.create({
   errorText: {
     fontSize: 13,
     textAlign: 'center',
+  },
+  rewardContainer: {
+    borderWidth: 1,
+    padding: Spacing.sm,
+    borderRadius: 10,
+    marginTop: Spacing.sm,
+  },
+  rewardText: {
+    fontSize: 13,
+    fontWeight: '700',
+    textAlign: 'center',
+  },
+  pendingGoalText: {
+    fontSize: 12,
+    lineHeight: 18,
+    marginTop: Spacing.xs,
   },
   foldBuffer: {
     height: Spacing.lg,

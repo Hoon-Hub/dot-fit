@@ -10,7 +10,9 @@ import {
 import { SafeAreaView } from 'react-native-safe-area-context';
 import { useRouter } from 'expo-router';
 import { Colors, Spacing, MaxContentWidth } from '../../constants/theme';
+import { CHARACTER_TYPES } from '../../constants/profile';
 import { setIntroSeen } from '../../services/storageService';
+import PixelCharacter from '../../components/PixelCharacter';
 
 export default function IntroScreen() {
   const router = useRouter();
@@ -49,9 +51,7 @@ export default function IntroScreen() {
             },
           ]}
         >
-          <View style={[styles.avatarCircle, { backgroundColor: theme.todayHighlight }]}>
-            <Text style={styles.characterEmoji}>🏃</Text>
-          </View>
+          <PixelCharacter type={CHARACTER_TYPES.LUTI} size="large" />
           <View style={[styles.pixelDecorDot, { backgroundColor: theme.primary }]} />
         </View>
 
@@ -121,16 +121,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     position: 'relative',
     marginVertical: Spacing.md,
-  },
-  avatarCircle: {
-    width: 100,
-    height: 100,
-    borderRadius: 50,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  characterEmoji: {
-    fontSize: 56,
   },
   pixelDecorDot: {
     position: 'absolute',

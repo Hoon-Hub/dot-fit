@@ -14,11 +14,12 @@ import {
   ActivityIndicator,
 } from 'react-native';
 import { SafeAreaView } from 'react-native-safe-area-context';
-import { useRouter } from 'expo-router';
+import { useFocusEffect, useRouter } from 'expo-router';
 import { Colors, Spacing, MaxContentWidth } from '../../constants/theme';
-import { saveCharacter, setOnboardingVersion } from '../../services/storageService';
+import { MAX_CHARACTER_NAME_LENGTH } from '../../constants/profile';
+import { getCharacterType, saveCharacter } from '../../services/storageService';
+import PixelCharacter from '../../components/PixelCharacter';
 
-const MAX_NAME_LENGTH = 10;
 
 export default function CharacterCreationScreen() {
   const router = useRouter();
@@ -28,6 +29,26 @@ export default function CharacterCreationScreen() {
   const [name, setName] = useState('');
   const [errorMsg, setErrorMsg] = useState('');
   const [submitting, setSubmitting] = useState(false);
+  const [characterType, setCharacterType] = useState(null);
+
+  useFocusEffect(
+    useCallback(() => {
+      let isActive = true;
+
+      getCharacterType().then((storedType) => {
+        if (!isActive) return;
+        if (storedType) {
+          setCharacterType(storedType);
+        } else {
+          router.replace('/onboarding/character-type');
+        }
+      });
+
+      return () => {
+        isActive = false;
+      };
+    }, [router]),
+  );
 
   const handleTextChange = (text) => {
     setErrorMsg('');
@@ -35,6 +56,8 @@ export default function CharacterCreationScreen() {
   };
 
   const handleCreateCharacter = useCallback(async () => {
+    if (!characterType) return;
+
     const trimmedName = name.trim();
 
     if (!trimmedName) {
@@ -42,8 +65,8 @@ export default function CharacterCreationScreen() {
       return;
     }
 
-    if (trimmedName.length > MAX_NAME_LENGTH) {
-      setErrorMsg(`이름은 최대 ${MAX_NAME_LENGTH}자까지 입력할 수 있습니다.`);
+    if (trimmedName.length > MAX_CHARACTER_NAME_LENGTH) {
+      setErrorMsg(`이름은 최대 ${MAX_CHARACTER_NAME_LENGTH}자까지 입력할 수 있습니다.`);
       return;
     }
 
@@ -59,10 +82,9 @@ export default function CharacterCreationScreen() {
       };
 
       const charSaved = await saveCharacter(characterData);
-      const versionSaved = await setOnboardingVersion(1);
 
-      if (charSaved && versionSaved) {
-        router.replace('/(tabs)');
+      if (charSaved) {
+        router.replace('/onboarding/step-goal');
       } else {
         setErrorMsg('캐릭터 저장에 실패했습니다. 다시 시도해 주세요.');
       }
@@ -72,7 +94,7 @@ export default function CharacterCreationScreen() {
     } finally {
       setSubmitting(false);
     }
-  }, [name, router]);
+  }, [characterType, name, router]);
 
   return (
     <SafeAreaView style={[styles.safeArea, { backgroundColor: theme.background }]}>
@@ -107,9 +129,7 @@ export default function CharacterCreationScreen() {
                   },
                 ]}
               >
-                <View style={[styles.avatarCircle, { backgroundColor: theme.todayHighlight }]}>
-                  <Text style={styles.characterEmoji}>🏃</Text>
-                </View>
+                <PixelCharacter type={characterType} size="medium" />
 
                 {/* 중립적 상태 표시 */}
                 <View style={[styles.statusBadge, { backgroundColor: theme.todayHighlight }]}>
@@ -124,7 +144,7 @@ export default function CharacterCreationScreen() {
                 <View style={styles.labelRow}>
                   <Text style={[styles.inputLabel, { color: theme.text }]}>캐릭터 이름</Text>
                   <Text style={[styles.counterText, { color: theme.textSecondary }]}>
-                    {name.trim().length}/{MAX_NAME_LENGTH}
+                    {name.trim().length}/{MAX_CHARACTER_NAME_LENGTH}
                   </Text>
                 </View>
 
@@ -141,7 +161,7 @@ export default function CharacterCreationScreen() {
                   placeholderTextColor={theme.textSecondary}
                   value={name}
                   onChangeText={handleTextChange}
-                  maxLength={MAX_NAME_LENGTH}
+                  maxLength={MAX_CHARACTER_NAME_LENGTH}
                   returnKeyType="done"
                   onSubmitEditing={handleCreateCharacter}
                   autoCorrect={false}
@@ -157,8 +177,9 @@ export default function CharacterCreationScreen() {
                 <TouchableOpacity
                   style={[styles.primaryButton, { backgroundColor: theme.primary }]}
                   onPress={handleCreateCharacter}
-                  disabled={submitting}
+                  disabled={!characterType || submitting}
                   activeOpacity={0.8}
+                  accessibilityState={{ disabled: !characterType || submitting }}
                 >
                   {submitting ? (
                     <ActivityIndicator size="small" color="#FFFFFF" />
@@ -224,17 +245,6 @@ const styles = StyleSheet.create({
     padding: Spacing.lg,
     alignItems: 'center',
     marginVertical: Spacing.md,
-  },
-  avatarCircle: {
-    width: 90,
-    height: 90,
-    borderRadius: 45,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginBottom: Spacing.md,
-  },
-  characterEmoji: {
-    fontSize: 50,
   },
   statusBadge: {
     paddingHorizontal: 12,
