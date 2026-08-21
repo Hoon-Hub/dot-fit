@@ -19,11 +19,12 @@ import {
   initializeHealthConnect,
   hasStepPermission,
   requestStepPermission,
-  getTodayActivity,
+  getCachedActivityAverage,
   getCachedWeeklyActivity,
   refreshActivity,
 } from '../../services/healthService';
 import { Colors, Spacing, MaxContentWidth } from '../../constants/theme';
+import { ACTIVITY_DATA_STATUS } from '../../constants/activity';
 import { getGoalForDate, getGoalState } from '../../services/goalService';
 import {
   evaluateDailyStepRewards,
@@ -38,6 +39,7 @@ export default function HomeScreen() {
 
   const [todayData, setTodayData] = useState(null);
   const [weeklyData, setWeeklyData] = useState([]);
+  const [activityAverage, setActivityAverage] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -46,6 +48,18 @@ export default function HomeScreen() {
   const [rewardMessage, setRewardMessage] = useState('');
   const [pendingGoal, setPendingGoal] = useState(null);
   const isMountedRef = useRef(true);
+
+  const applyActivityAverage = useCallback((nextAverage) => {
+    setActivityAverage((previousAverage) => {
+      if (
+        previousAverage?.status === nextAverage?.status &&
+        previousAverage?.activityState === nextAverage?.activityState
+      ) {
+        return previousAverage;
+      }
+      return nextAverage;
+    });
+  }, []);
 
   const applyGoalData = useCallback((activity, goalState) => {
     const weekly = activity.weekly.map((item) => ({
@@ -92,8 +106,9 @@ export default function HomeScreen() {
     try {
       setError(null);
 
-      const [cachedWeekly, goalState, wallet] = await Promise.all([
+      const [cachedWeekly, cachedAverage, goalState, wallet] = await Promise.all([
         getCachedWeeklyActivity(),
+        getCachedActivityAverage(),
         getGoalState(),
         getCoinWallet(),
       ]);
@@ -103,6 +118,7 @@ export default function HomeScreen() {
       if (isMountedRef.current) {
         setCoinBalance(wallet.balance);
         setAchievements(getAchievementsFromWallet(wallet));
+        applyActivityAverage(cachedAverage);
       }
 
       if (cachedWeekly && isMountedRef.current) {
@@ -128,27 +144,11 @@ export default function HomeScreen() {
         throw new Error('Health Connect step permission is not granted.');
       }
 
-      if (cachedWeekly) {
-        const today = await getTodayActivity();
-        if (today.date === cachedWeekly[cachedWeekly.length - 1].date) {
-          if (isMountedRef.current) {
-            const updatedWeekly = cachedWeekly.map((item) =>
-              item.date === today.date ? { ...item, steps: today.steps } : item,
-            );
-            applyGoalData({ today, weekly: updatedWeekly }, goalState);
-            await applyRewards(updatedWeekly);
-          }
-        } else {
-          const activity = await refreshActivity();
-          if (isMountedRef.current) {
-            applyGoalData(activity, goalState);
-            await applyRewards(activity.weekly);
-          }
-        }
-      } else {
-        const activity = await refreshActivity();
-        if (isMountedRef.current) {
-          applyGoalData(activity, goalState);
+      const activity = await refreshActivity();
+      if (isMountedRef.current) {
+        applyGoalData(activity, goalState);
+        applyActivityAverage(activity.average);
+        if (activity.average.status === ACTIVITY_DATA_STATUS.READY) {
           await applyRewards(activity.weekly);
         }
       }
@@ -163,7 +163,7 @@ export default function HomeScreen() {
         if (hasCachedWeeklyData) setRefreshing(false);
       }
     }
-  }, [applyGoalData, applyRewards]);
+  }, [applyActivityAverage, applyGoalData, applyRewards]);
 
   useEffect(() => {
     isMountedRef.current = true;
@@ -213,7 +213,10 @@ export default function HomeScreen() {
       if (isMountedRef.current) {
         const goalState = await getGoalState();
         applyGoalData(updated, goalState);
-        await applyRewards(updated.weekly);
+        applyActivityAverage(updated.average);
+        if (updated.average.status === ACTIVITY_DATA_STATUS.READY) {
+          await applyRewards(updated.weekly);
+        }
       }
     } catch (err) {
       console.error('Failed to refresh health activity:', err);
@@ -223,7 +226,7 @@ export default function HomeScreen() {
     } finally {
       if (isMountedRef.current) setRefreshing(false);
     }
-  }, [applyGoalData, applyRewards]);
+  }, [applyActivityAverage, applyGoalData, applyRewards]);
 
   if (loading) {
     return (
@@ -275,7 +278,11 @@ export default function HomeScreen() {
           )}
 
           {/* 2. 사람 캐릭터 영역 (화면 높이의 약 30%) */}
-          <CharacterSection colorScheme={colorScheme} />
+          <CharacterSection
+            activityDataStatus={activityAverage?.status}
+            activityState={activityAverage?.activityState}
+            colorScheme={colorScheme}
+          />
 
           {/* 3. 목표 진행률 및 Progress Bar */}
           <GoalProgress

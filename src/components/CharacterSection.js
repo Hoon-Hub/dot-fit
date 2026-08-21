@@ -1,21 +1,41 @@
 import { useFocusEffect, useRouter } from "expo-router";
 import { useCallback, useState } from "react";
-import { StyleSheet, Text, useWindowDimensions, View } from "react-native";
+import {
+  Image,
+  StyleSheet,
+  Text,
+  useWindowDimensions,
+  View,
+} from "react-native";
+import {
+  ACTIVITY_DATA_STATUS,
+  ACTIVITY_STATE_LABELS,
+} from "../constants/activity";
+import { getCharacterImageSource } from "../constants/characterImages";
 import { Colors, Spacing } from "../constants/theme";
 import { getCharacter, getCharacterType } from "../services/storageService";
 import PixelCharacter from "./PixelCharacter";
+
+const CHARACTER_VISUAL_PADDING = Spacing.sm;
 
 /**
  * CharacterSection Component
  *
  * 메인 사람 캐릭터 표시 영역입니다.
- * 화면 높이의 약 30%를 점유하며 (min 200px, max 320px),
+ * 화면 높이에 맞춘 캐릭터와 이름, 활동 상태를 표시합니다.
  * 사용자의 생성 캐릭터 이름과 외형 공간을 제공합니다.
  */
-export default function CharacterSection({ colorScheme = "light" }) {
+export default function CharacterSection({
+  activityDataStatus,
+  activityState,
+  colorScheme = "light",
+}) {
   const router = useRouter();
   const theme = Colors[colorScheme] || Colors.light;
-  const { height: screenHeight } = useWindowDimensions();
+  const {
+    width: screenWidth,
+    height: screenHeight,
+  } = useWindowDimensions();
   const [characterName, setCharacterName] = useState("");
   const [characterType, setCharacterType] = useState(null);
 
@@ -31,7 +51,7 @@ export default function CharacterSection({ colorScheme = "light" }) {
         if (!isMounted) return;
 
         if (!storedType) {
-          router.replace('/onboarding/character-type');
+          router.replace("/onboarding/character-type");
           return;
         }
 
@@ -49,11 +69,25 @@ export default function CharacterSection({ colorScheme = "light" }) {
     }, [router]),
   );
 
-  // 화면 높이의 약 30% 계산 (적정 min/max 제약 적용)
-  const containerHeight = Math.min(
+  const characterHeight = Math.min(
+    Math.max(screenHeight * 0.32, 240),
     320,
-    Math.max(200, Math.round(screenHeight * 0.3)),
   );
+  const characterImageSource = getCharacterImageSource({
+    characterType,
+    activityDataStatus,
+    activityState,
+  });
+  const characterImageDimensions = characterImageSource
+    ? Image.resolveAssetSource(characterImageSource)
+    : null;
+  const calculatedWidth = characterImageDimensions
+    ? characterHeight *
+      (characterImageDimensions.width / characterImageDimensions.height)
+    : characterHeight;
+  const characterWidth = Math.min(calculatedWidth, screenWidth * 0.7, 300);
+  const characterVisualWidth = characterWidth + CHARACTER_VISUAL_PADDING * 2;
+  const characterVisualHeight = characterHeight + CHARACTER_VISUAL_PADDING * 2;
 
   return (
     <View style={styles.container}>
@@ -61,7 +95,6 @@ export default function CharacterSection({ colorScheme = "light" }) {
         style={[
           styles.characterBox,
           {
-            height: containerHeight,
             backgroundColor: theme.card,
             borderColor: theme.border,
           },
@@ -82,15 +115,38 @@ export default function CharacterSection({ colorScheme = "light" }) {
             </View>
           )}
 
-          <PixelCharacter type={characterType} size="large" />
+          <View
+            style={[
+              styles.characterVisual,
+              {
+                width: characterVisualWidth,
+                height: characterVisualHeight,
+              },
+            ]}
+          >
+            {characterImageSource ? (
+              <Image
+                source={characterImageSource}
+                style={{ width: characterWidth, height: characterHeight }}
+                resizeMode="contain"
+                accessibilityLabel={`누티 ${ACTIVITY_STATE_LABELS[activityState]} 상태 캐릭터`}
+              />
+            ) : (
+              <PixelCharacter type={characterType} size="large" />
+            )}
+          </View>
 
           {/* 은은한 캐릭터 상태 메시지 */}
           <Text
             style={[styles.characterStatusText, { color: theme.textSecondary }]}
           >
-            {characterName
-              ? `"${characterName}님 안녕하세요!"`
-              : '"오늘도 활기차게 함께 걸어요!"'}
+            {activityDataStatus === ACTIVITY_DATA_STATUS.COLLECTING
+              ? "활동 데이터를 모으고 있어요"
+              : ACTIVITY_STATE_LABELS[activityState]
+                ? `활동 상태: ${ACTIVITY_STATE_LABELS[activityState]}`
+                : characterName
+                  ? `"${characterName}님 안녕하세요!"`
+                  : '"오늘도 활기차게 함께 걸어요!"'}
           </Text>
         </View>
       </View>
@@ -110,24 +166,30 @@ const styles = StyleSheet.create({
     borderWidth: 1,
     alignItems: "center",
     justifyContent: "center",
-    padding: Spacing.md,
+    paddingHorizontal: Spacing.md,
+    paddingVertical: Spacing.sm,
   },
   characterContent: {
     alignItems: "center",
     justifyContent: "center",
-    gap: Spacing.sm,
+    gap: Spacing.xs,
   },
   characterStatusText: {
     fontSize: 13,
     fontWeight: "500",
     fontStyle: "italic",
-    marginTop: 4,
+    lineHeight: 18,
+    textAlign: "center",
+  },
+  characterVisual: {
+    alignItems: "center",
+    justifyContent: "center",
+    overflow: "visible",
   },
   nameBadge: {
     paddingHorizontal: 12,
     paddingVertical: 4,
     borderRadius: 12,
-    marginBottom: 2,
   },
   nameBadgeText: {
     fontSize: 14,

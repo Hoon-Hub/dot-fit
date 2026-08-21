@@ -39,6 +39,7 @@
   },
   "scripts": {
     "start": "expo start",
+    "test": "node --experimental-vm-modules --test tests/activityAverage.test.mjs tests/activityDataSource.test.mjs tests/activityState.test.mjs tests/characterImages.test.mjs",
     "reset-project": "node ./scripts/reset-project.js",
     "android": "expo run:android",
     "ios": "expo run:ios",

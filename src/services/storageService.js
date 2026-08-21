@@ -1,6 +1,13 @@
 import AsyncStorage from '@react-native-async-storage/async-storage';
 import { STORAGE_KEYS } from '../constants/storageKeys';
 import { isCharacterType } from '../constants/profile';
+import {
+  ACTIVITY_DATA_STATUS,
+  isActivityState,
+} from '../constants/activity';
+import { parseLocalDateKey } from '../utils/dateUtils';
+
+let activityTrackingStartQueue = Promise.resolve();
 
 /**
  * Storage Service
@@ -168,6 +175,105 @@ export async function saveWeeklyActivityCache(cache) {
     return true;
   } catch (err) {
     console.error('Failed to save weekly activity cache:', err);
+    return false;
+  }
+}
+
+export async function getActivityTrackingStartedAt() {
+  try {
+    const dateKey = await AsyncStorage.getItem(
+      STORAGE_KEYS.ACTIVITY_TRACKING_STARTED_AT,
+    );
+    return parseLocalDateKey(dateKey) ? dateKey : null;
+  } catch (err) {
+    console.error('Failed to get activity tracking start date:', err);
+    return null;
+  }
+}
+
+async function ensureActivityTrackingStartInternal(dateKey) {
+  if (!parseLocalDateKey(dateKey)) {
+    throw new Error('Invalid activity tracking start date.');
+  }
+
+  try {
+    const storedDateKey = await AsyncStorage.getItem(
+      STORAGE_KEYS.ACTIVITY_TRACKING_STARTED_AT,
+    );
+    if (parseLocalDateKey(storedDateKey)) return storedDateKey;
+
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.ACTIVITY_TRACKING_STARTED_AT,
+      dateKey,
+    );
+    return dateKey;
+  } catch (err) {
+    console.error('Failed to save activity tracking start date:', err);
+    throw err;
+  }
+}
+
+export function ensureActivityTrackingStartedAt(dateKey) {
+  const result = activityTrackingStartQueue.then(() =>
+    ensureActivityTrackingStartInternal(dateKey),
+  );
+  activityTrackingStartQueue = result.catch(() => {});
+  return result;
+}
+
+function isValidActivityAverageCache(cache) {
+  const hasValidStatus = Object.values(ACTIVITY_DATA_STATUS).includes(
+    cache?.status,
+  );
+  const hasNoActivityState = cache?.activityState == null;
+  const hasValidActivityState =
+    isActivityState(cache?.activityState) &&
+    Number.isFinite(cache?.activityStateAverageSteps) &&
+    typeof cache?.activityStateEvaluatedAt === 'string';
+
+  return (
+    cache?.version === 1 &&
+    hasValidStatus &&
+    Boolean(parseLocalDateKey(cache.startDate)) &&
+    Boolean(parseLocalDateKey(cache.endDate)) &&
+    Number.isInteger(cache.dayCount) &&
+    cache.dayCount > 0 &&
+    Number.isFinite(cache.totalSteps) &&
+    (cache.status === ACTIVITY_DATA_STATUS.COLLECTING
+      ? cache.averageSteps === null
+      : Number.isFinite(cache.averageSteps)) &&
+    typeof cache.calculatedAt === 'string' &&
+    (hasNoActivityState || hasValidActivityState)
+  );
+}
+
+export async function getActivityAverageCache({ throwOnError = false } = {}) {
+  try {
+    const jsonStr = await AsyncStorage.getItem(
+      STORAGE_KEYS.ACTIVITY_AVERAGE_CACHE,
+    );
+    if (!jsonStr) return null;
+
+    const cache = JSON.parse(jsonStr);
+    return isValidActivityAverageCache(cache) ? cache : null;
+  } catch (err) {
+    console.error('Failed to get activity average cache:', err);
+    if (throwOnError) throw err;
+    return null;
+  }
+}
+
+export async function saveActivityAverageCache(cache) {
+  if (!isValidActivityAverageCache(cache)) return false;
+
+  try {
+    await AsyncStorage.setItem(
+      STORAGE_KEYS.ACTIVITY_AVERAGE_CACHE,
+      JSON.stringify(cache),
+    );
+    return true;
+  } catch (err) {
+    console.error('Failed to save activity average cache:', err);
     return false;
   }
 }
